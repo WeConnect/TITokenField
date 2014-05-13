@@ -334,7 +334,7 @@
 
 	searchString = [searchString stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
 
-	if (searchString.length || _forcePickSearchResult){
+	if (searchString.length){
 
         if ([_tokenField.delegate respondsToSelector:@selector(tokenField:shouldUseCustomSearchForSearchString:)] && [_tokenField.delegate tokenField:_tokenField shouldUseCustomSearchForSearchString:searchString]) {
             if ([_tokenField.delegate respondsToSelector:@selector(tokenField:performCustomSearchForSearchString:withCompletionHandler:)]) {
