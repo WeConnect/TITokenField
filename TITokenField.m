@@ -35,9 +35,6 @@
 @synthesize showAlreadyTokenized = _showAlreadyTokenized;
 @synthesize searchSubtitles = _searchSubtitles;
 @synthesize forcePickSearchResult = _forcePickSearchResult;
-@synthesize shouldSortResults = _shouldSortResults;
-@synthesize shouldSearchInBackground = _shouldSearchInBackground;
-@synthesize permittedArrowDirections = _permittedArrowDirections;
 @synthesize tokenField = _tokenField;
 @synthesize resultsTable = _resultsTable;
 @synthesize contentView = _contentView;
@@ -66,15 +63,12 @@
 - (void)setup {
 	
 	[self setBackgroundColor:[UIColor clearColor]];
-	[self setDelaysContentTouches:YES];
+	[self setDelaysContentTouches:NO];
 	[self setMultipleTouchEnabled:NO];
 	
 	_showAlreadyTokenized = NO;
     _searchSubtitles = YES;
     _forcePickSearchResult = NO;
-    _shouldSortResults = YES;
-    _shouldSearchInBackground = NO;
-    _permittedArrowDirections = UIPopoverArrowDirectionUp;
 	_resultsArray = [NSMutableArray array];
 	
 	_tokenField = [[TITokenField alloc] initWithFrame:CGRectMake(0, 0, self.bounds.size.width, 42)];
@@ -94,7 +88,7 @@
 	
 	// This view is created for convenience, because it resizes and moves with the rest of the subviews.
 	_contentView = [[UIView alloc] initWithFrame:CGRectMake(0, tokenFieldBottom + 1, self.bounds.size.width,
-														   self.bounds.size.height - tokenFieldBottom - 1)];
+                                                            self.bounds.size.height - tokenFieldBottom - 1)];
 	[_contentView setBackgroundColor:[UIColor clearColor]];
 	[self addSubview:_contentView];
 	
@@ -221,7 +215,6 @@
 	
 	if (!cell) cell = [[UITableViewCell alloc] initWithStyle:(subtitle ? UITableViewCellStyleSubtitle : UITableViewCellStyleDefault) reuseIdentifier:CellIdentifier];
 	
-    [cell.imageView setImage:[self searchResultImageForRepresentedObject:representedObject]];
 	[cell.textLabel setText:[self searchResultStringForRepresentedObject:representedObject]];
 	[cell.detailTextLabel setText:subtitle];
 	
@@ -251,8 +244,9 @@
 
 - (void)tokenFieldTextDidChange:(TITokenField *)field {
     [self resultsForSearchString:_tokenField.text];
-
-	[self setSearchResultsVisible:(_resultsArray.count > 0)];
+    
+    if (_forcePickSearchResult) [self setSearchResultsVisible:YES];
+	else [self setSearchResultsVisible:(_resultsArray.count > 0)];
 }
 
 - (void)tokenFieldFrameWillChange:(TITokenField *)field {
@@ -299,15 +293,6 @@
 	return nil;
 }
 
-- (UIImage *)searchResultImageForRepresentedObject:(id)object {
-    if ([_tokenField.delegate respondsToSelector:@selector(tokenField:searchResultImageForRepresentedObject:)]) {
-        return [_tokenField.delegate tokenField:_tokenField searchResultImageForRepresentedObject:object];
-    }
-    
-    return nil;
-}
-
-
 - (void)setSearchResultsVisible:(BOOL)visible {
 	if (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPad){
 		
@@ -322,93 +307,59 @@
 }
 
 - (void)resultsForSearchString:(NSString *)searchString {
-
+	
 	// The brute force searching method.
 	// Takes the input string and compares it against everything in the source array.
 	// If the source is massive, this could take some time.
 	// You could always subclass and override this if needed or do it on a background thread.
 	// GCD would be great for that.
-
+	
 	[_resultsArray removeAllObjects];
 	[_resultsTable reloadData];
-
+	
 	searchString = [searchString stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-
-	if (searchString.length){
-
-        if ([_tokenField.delegate respondsToSelector:@selector(tokenField:shouldUseCustomSearchForSearchString:)] && [_tokenField.delegate tokenField:_tokenField shouldUseCustomSearchForSearchString:searchString]) {
-            if ([_tokenField.delegate respondsToSelector:@selector(tokenField:performCustomSearchForSearchString:withCompletionHandler:)]) {
-                [_tokenField.delegate tokenField:_tokenField performCustomSearchForSearchString:searchString withCompletionHandler:^(NSArray *results) {
-                    [self searchDidFinish:results];
-                }];
-            }
-        } else {
-            if (_shouldSearchInBackground) {
-                [self performSelectorInBackground:@selector(performSearch:) withObject:searchString];
-            } else {
-                [self performSearch:searchString];
-            }
-        }
-	}
-}
-
-- (void) performSearch:(NSString *)searchString {
-  NSMutableArray * resultsToAdd = [[NSMutableArray alloc] init];
-  [_sourceArray enumerateObjectsUsingBlock:^(id sourceObject, NSUInteger idx, BOOL *stop){
-
-    NSString * query = [self searchResultStringForRepresentedObject:sourceObject];
-    NSString * querySubtitle = [self searchResultSubtitleForRepresentedObject:sourceObject];
-    if (!querySubtitle || !_searchSubtitles) querySubtitle = @"";
-    
-    if ([query rangeOfString:searchString options:NSCaseInsensitiveSearch].location != NSNotFound ||
+	
+	if (searchString.length || _forcePickSearchResult){
+		[_sourceArray enumerateObjectsUsingBlock:^(id sourceObject, NSUInteger idx, BOOL *stop){
+			
+			NSString * query = [self searchResultStringForRepresentedObject:sourceObject];
+			NSString * querySubtitle = [self searchResultSubtitleForRepresentedObject:sourceObject];
+			if (!querySubtitle || !_searchSubtitles) querySubtitle = @"";
+			
+			if ([query rangeOfString:searchString options:NSCaseInsensitiveSearch].location != NSNotFound ||
 				[querySubtitle rangeOfString:searchString options:NSCaseInsensitiveSearch].location != NSNotFound ||
-        (_forcePickSearchResult && searchString.length == 0)){
-
-      __block BOOL shouldAdd = ![resultsToAdd containsObject:sourceObject];
-      if (shouldAdd && !_showAlreadyTokenized){
-
-        [_tokenField.tokens enumerateObjectsUsingBlock:^(TIToken * token, NSUInteger idx, BOOL *secondStop){
-          if ([token.representedObject isEqual:sourceObject]){
-            shouldAdd = NO;
-            *secondStop = YES;
-          }
-        }];
-      }
-
-      if (shouldAdd) [resultsToAdd addObject:sourceObject];
-    }
-  }];
-
-    [self searchDidFinish:resultsToAdd];
-}
-
-- (void)searchDidFinish:(NSArray *)results
-{
-    [_resultsArray addObjectsFromArray:results];
+                (_forcePickSearchResult && searchString.length == 0)){
+				
+				__block BOOL shouldAdd = ![_resultsArray containsObject:sourceObject];
+				if (shouldAdd && !_showAlreadyTokenized){
+					
+					[_tokenField.tokens enumerateObjectsUsingBlock:^(TIToken * token, NSUInteger idx, BOOL *secondStop){
+						if ([token.representedObject isEqual:sourceObject]){
+							shouldAdd = NO;
+							*secondStop = YES;
+						}
+					}];
+				}
+				
+				if (shouldAdd) [_resultsArray addObject:sourceObject];
+			}
+		}];
+	}
+    
     if (_resultsArray.count > 0) {
-        if (_shouldSortResults) {
-            [_resultsArray sortUsingComparator:^NSComparisonResult(id obj1, id obj2) {
-                return [[self searchResultStringForRepresentedObject:obj1] localizedCaseInsensitiveCompare:[self searchResultStringForRepresentedObject:obj2]];
-            }];
-        }
-        [self performSelectorOnMainThread:@selector(reloadResultsTable) withObject:nil waitUntilDone:YES];
+        [_resultsArray sortUsingComparator:^NSComparisonResult(id obj1, id obj2) {
+            return [[self searchResultStringForRepresentedObject:obj1] localizedCaseInsensitiveCompare:[self searchResultStringForRepresentedObject:obj2]];
+        }];
+        [_resultsTable reloadData];
     }
-}
-
-
--(void) reloadResultsTable {
-  [_resultsTable setHidden:NO];
-  [_resultsTable reloadData];
 }
 
 - (void)presentpopoverAtTokenFieldCaretAnimated:(BOOL)animated {
 	
     UITextPosition * position = [_tokenField positionFromPosition:_tokenField.beginningOfDocument offset:2];
 	
-	[_popoverController presentPopoverFromRect:[_tokenField caretRectForPosition:position]
-                                        inView:_tokenField
-					 permittedArrowDirections:[self permittedArrowDirections]
-                                      animated:animated];
+	[_popoverController presentPopoverFromRect:[_tokenField caretRectForPosition:position] inView:_tokenField
+                      permittedArrowDirections:UIPopoverArrowDirectionUp animated:animated];
 }
 
 #pragma mark Other
@@ -497,7 +448,7 @@ NSString * const kTextHidden = @"\u200D"; // Zero-Width Joiner
 	[self.layer setShadowRadius:12];
 	
 	[self setPromptText:@"To:"];
-    	[self setText:kTextEmpty];
+	[self setText:kTextEmpty];
 	
 	_internalDelegate = [[TITokenFieldInternalDelegate alloc] init];
 	[_internalDelegate setTokenField:self];
@@ -507,7 +458,6 @@ NSString * const kTextHidden = @"\u200D"; // Zero-Width Joiner
 	_editable = YES;
 	_removesTokensOnEndEditing = YES;
 	_tokenizingCharacters = [NSCharacterSet characterSetWithCharactersInString:@","];
-    _tokenLimit = -1;
 }
 
 #pragma mark Property Overrides
@@ -567,9 +517,7 @@ NSString * const kTextHidden = @"\u200D"; // Zero-Width Joiner
 }
 
 - (void)didBeginEditing {
-    if (_removesTokensOnEndEditing) {
-        	[_tokens enumerateObjectsUsingBlock:^(TIToken * token, NSUInteger idx, BOOL *stop){[self addToken:token];}];
-    }
+	[_tokens enumerateObjectsUsingBlock:^(TIToken * token, NSUInteger idx, BOOL *stop){[self addToken:token];}];
 }
 
 - (void)didEndEditing {
@@ -647,19 +595,6 @@ NSString * const kTextHidden = @"\u200D"; // Zero-Width Joiner
 	return nil;
 }
 
-- (void)addTokensWithTitleList:(NSString *)titleList {
-    if ([titleList length] > 0) {
-        self.text = titleList;
-        [self tokenizeText];
-    }
-}
-
-- (void)addTokensWithTitleArray:(NSArray *)titleArray {
-    for (NSString *title in titleArray) {
-        [self addTokenWithTitle:title];
-    }
-}
-
 - (void)addToken:(TIToken *)token {
 	
 	BOOL shouldAdd = YES;
@@ -677,7 +612,6 @@ NSString * const kTextHidden = @"\u200D"; // Zero-Width Joiner
 		
 		if (![_tokens containsObject:token]) {
 			[_tokens addObject:token];
-            [self layoutTokensAnimated:YES];
             
 			if ([delegate respondsToSelector:@selector(tokenField:didAddToken:)]){
 				[delegate tokenField:self didAddToken:token];
@@ -704,8 +638,7 @@ NSString * const kTextHidden = @"\u200D"; // Zero-Width Joiner
 		
 		[token removeFromSuperview];
 		[_tokens removeObject:token];
-        [self layoutTokensAnimated:YES];
-
+		
 		if ([delegate respondsToSelector:@selector(tokenField:didRemoveToken:)]){
 			[delegate tokenField:self didRemoveToken:token];
 		}
@@ -731,7 +664,11 @@ NSString * const kTextHidden = @"\u200D"; // Zero-Width Joiner
 	_selectedToken = token;
 	[_selectedToken setSelected:YES];
 	
-	[self becomeFirstResponder];
+    if ([delegate respondsToSelector:@selector(tokenField:didSelectToken:)]){
+        [delegate tokenField:self didSelectToken:token];
+    }
+    
+	//[self becomeFirstResponder];
 	[self setText:kTextHidden];
 }
 
@@ -775,7 +712,7 @@ NSString * const kTextHidden = @"\u200D"; // Zero-Width Joiner
 	CGFloat leftMargin = self.leftViewWidth + 12;
 	CGFloat hPadding = 8;
 	CGFloat rightMargin = self.rightViewWidth + hPadding;
-	CGFloat lineHeight = ceilf(self.font.lineHeight) + topMargin + 5;
+	CGFloat lineHeight = self.font.lineHeight + topMargin + 5;
 	
 	_numberOfLines = 1;
 	_tokenCaret = (CGPoint){leftMargin, (topMargin - 1)};
@@ -804,7 +741,7 @@ NSString * const kTextHidden = @"\u200D"; // Zero-Width Joiner
 		}
 	}];
 	
-	return ceilf(_tokenCaret.y + lineHeight);
+	return _tokenCaret.y + lineHeight;
 }
 
 #pragma mark View Handlers
@@ -858,7 +795,7 @@ NSString * const kTextHidden = @"\u200D"; // Zero-Width Joiner
 			label = [[UILabel alloc] initWithFrame:CGRectZero];
 			[label setTextColor:[UIColor colorWithWhite:0.5 alpha:1]];
 			[self setLeftView:label];
-
+            
 			[self setLeftViewMode:UITextFieldViewModeAlways];
 		}
 		
@@ -882,7 +819,7 @@ NSString * const kTextHidden = @"\u200D"; // Zero-Width Joiner
 		if (!label || ![label isKindOfClass:[UILabel class]]){
 			label = [[UILabel alloc] initWithFrame:CGRectMake(_tokenCaret.x + 3, _tokenCaret.y + 2, self.rightView.bounds.size.width, self.rightView.bounds.size.height)];
 			[label setTextColor:[UIColor colorWithWhite:0.75 alpha:1]];
-			 _placeHolderLabel = label;
+            _placeHolderLabel = label;
             [self addSubview: _placeHolderLabel];
 		}
 		
@@ -1015,11 +952,6 @@ NSString * const kTextHidden = @"\u200D"; // Zero-Width Joiner
 	if ([_delegate respondsToSelector:@selector(textField:shouldChangeCharactersInRange:replacementString:)]){
 		return [_delegate textField:textField shouldChangeCharactersInRange:range replacementString:string];
 	}
-    
-    if (_tokenField.tokenLimit!=-1 &&
-        [_tokenField.tokens count] >= _tokenField.tokenLimit) {
-        return NO;
-    }
 	
 	return YES;
 }
