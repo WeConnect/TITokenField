@@ -317,6 +317,13 @@
 	[_resultsArray removeAllObjects];
 	[_resultsTable reloadData];
 	
+    if([searchString isEqualToString:@""])
+    {
+        [_resultsArray addObjectsFromArray:_sourceArray];
+        [_resultsTable reloadData];
+        return;
+    }
+    
 	searchString = [searchString stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
 	
 	if (searchString.length || _forcePickSearchResult){

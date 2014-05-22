@@ -66,6 +66,8 @@
 @property (nonatomic, copy) NSArray * sourceArray;
 @property (weak, nonatomic, readonly) NSArray * tokenTitles;
 
+- (void)setSearchResultsVisible:(BOOL)visible;
+- (void)resultsForSearchString:(NSString *)search;
 - (void)updateContentSize;
 
 @end
