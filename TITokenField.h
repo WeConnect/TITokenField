@@ -30,6 +30,9 @@
 
 @class TITokenField, TIToken;
 
+extern NSString * const kTextEmpty; // Zero-Width Space
+extern NSString * const kTextHidden; // Zero-Width Joiner
+
 //==========================================================
 #pragma mark - Delegate Methods -
 //==========================================================
@@ -47,6 +50,8 @@
 - (NSString *)tokenField:(TITokenField *)tokenField searchResultSubtitleForRepresentedObject:(id)object;
 - (UITableViewCell *)tokenField:(TITokenField *)tokenField resultsTableView:(UITableView *)tableView cellForRepresentedObject:(id)object;
 - (CGFloat)tokenField:(TITokenField *)tokenField resultsTableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)indexPath;
+
+- (void)didChangeFrameForTokenField:(TITokenField *)tokenField;
 @end
 
 @interface TITokenFieldInternalDelegate : NSObject <UITextFieldDelegate>

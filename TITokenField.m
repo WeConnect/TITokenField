@@ -762,8 +762,13 @@ NSString * const kTextHidden = @"\u200D"; // Zero-Width Joiner
 			[self setFrame:((CGRect){self.frame.origin, {self.bounds.size.width, newHeight}})];
 			[self sendActionsForControlEvents:(UIControlEvents)TITokenFieldControlEventFrameWillChange];
 			
-		} completion:^(BOOL complete){
-			if (complete) [self sendActionsForControlEvents:(UIControlEvents)TITokenFieldControlEventFrameDidChange];
+    } completion:^(BOOL complete){
+      if (complete) {
+        [self sendActionsForControlEvents:(UIControlEvents)TITokenFieldControlEventFrameDidChange];
+        if ([self.delegate respondsToSelector:@selector(didChangeFrameToTokenField:)]) {
+          [self.delegate didChangeFrameForTokenField:nil];
+        }
+      }
 		}];
 	}
 }
