@@ -765,7 +765,7 @@ NSString * const kTextHidden = @"\u200D"; // Zero-Width Joiner
     } completion:^(BOOL complete){
       if (complete) {
         [self sendActionsForControlEvents:(UIControlEvents)TITokenFieldControlEventFrameDidChange];
-        if ([self.delegate respondsToSelector:@selector(didChangeFrameToTokenField:)]) {
+        if ([self.delegate respondsToSelector:@selector(didChangeFrameForTokenField:)]) {
           [self.delegate didChangeFrameForTokenField:nil];
         }
       }
